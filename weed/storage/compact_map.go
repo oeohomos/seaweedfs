@@ -50,17 +50,20 @@ func (cs *CompactSection) Set(key Key, offset, size uint32) (oldOffset, oldSize 
 		cs.values[i].Offset, cs.values[i].Size = offset, size
 	} else {
 		needOverflow := cs.counter >= batch
-		needOverflow = needOverflow || cs.counter > 0 && cs.values[cs.counter-1].Key > key
 		if needOverflow {
-			//println("start", cs.start, "counter", cs.counter, "key", key)
+			println("overflow", len(cs.overflow), "start", cs.start, "-", cs.values[cs.counter-1].Key, "counter", cs.counter, "key", key)
 			if oldValue, found := cs.overflow[key]; found {
 				oldOffset, oldSize = oldValue.Offset, oldValue.Size
 			}
 			cs.overflow[key] = NeedleValue{Key: key, Offset: offset, Size: size}
 		} else {
-			p := &cs.values[cs.counter]
+			// println("append index", cs.counter, "key", key, cs.values[cs.counter-1].Key)
+			k := cs.counter
+			for ; k > 0 && cs.values[k-1].Key > key; k-- {
+				cs.values[k] = cs.values[k-1]
+			}
+			p := &cs.values[k]
 			p.Key, p.Offset, p.Size = key, offset, size
-			//println("added index", cs.counter, "key", key, cs.values[cs.counter].Key)
 			cs.counter++
 		}
 	}
@@ -98,6 +101,7 @@ func (cs *CompactSection) Get(key Key) (*NeedleValue, bool) {
 	cs.RUnlock()
 	return nil, false
 }
+
 func (cs *CompactSection) binarySearchValues(key Key) int {
 	l, h := 0, cs.counter-1
 	if h >= 0 && cs.values[h].Key < key {
